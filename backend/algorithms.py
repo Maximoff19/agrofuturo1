@@ -57,7 +57,8 @@ def run_divide_and_conquer(climate_df: pd.DataFrame, partitions: int = 4) -> Dic
     return {"aggregate": aggregate, "partitions": results}
 
 
-# --- QuickSort / MergeSort (endpoint /algorithms/sort para clima y suelo) ---
+# --- QuickSort (endpoint /algorithms/sort; usado en frontend para ranking de zonas y series de clima) ---
+# Front: quicksort ordena rankings de suelo/clima; se llama desde app.js al cargar el ranking inicial.
 def quicksort(items: List[Dict], key: str) -> List[Dict]:
     # Ordena recursivamente usando QuickSort
     if len(items) <= 1:
@@ -69,60 +70,14 @@ def quicksort(items: List[Dict], key: str) -> List[Dict]:
     return quicksort(left, key) + middle + quicksort(right, key)
 
 
-def mergesort(items: List[Dict], key: str) -> List[Dict]:
-    # Ordena recursivamente usando MergeSort
-    if len(items) <= 1:
-        return items  # base
-    mid = len(items) // 2  # punto medio
-    left = mergesort(items[:mid], key)  # ordena izquierda
-    right = mergesort(items[mid:], key)  # ordena derecha
-    return _merge(left, right, key)  # combina
-
-
-def _merge(left: List[Dict], right: List[Dict], key: str) -> List[Dict]:
-    merged: List[Dict] = []  # resultado
-    i = j = 0  # índices
-    while i < len(left) and j < len(right):  # mientras ambos tienen elementos
-        if left[i][key] <= right[j][key]:
-            merged.append(left[i]); i += 1  # agrega de izquierda
-        else:
-            merged.append(right[j]); j += 1  # agrega de derecha
-    merged.extend(left[i:])  # agrega remanente izquierda
-    merged.extend(right[j:])  # agrega remanente derecha
-    return merged  # lista combinada
-
-
 def run_sort(items: List[Dict], key: str, method: str = "quicksort", reverse: bool = False) -> List[Dict]:
-    # Selecciona QuickSort o MergeSort y opcionalmente revierte el orden
-    sorter = quicksort if method.lower() == "quicksort" else mergesort  # elige algoritmo
-    sorted_items = sorter(items, key)  # ordena
+    # Selecciona QuickSort (único método soportado) y opcionalmente revierte el orden
+    sorted_items = quicksort(items, key)  # ordena
     if reverse:
         sorted_items.reverse()  # invierte si se requiere
     return sorted_items  # resultado
 
 
-# --- Floyd–Warshall (endpoint /algorithms/floyd-warshall, matrices de costo para mapas/matrices) ---
-def run_floyd_warshall(graph: ZoneGraph) -> Dict:
-    # Camino mínimo entre todos los pares de zonas (Floyd–Warshall)
-    nodes = list(graph.adjacency.keys())  # nodos
-    index = {n: i for i, n in enumerate(nodes)}  # índice a matriz
-    n = len(nodes)  # cantidad nodos
-    inf = float("inf")  # infinito
-    dist = [[inf] * n for _ in range(n)]  # matriz distancias
-    for i in range(n):
-        dist[i][i] = 0.0  # diagonal en cero
-    for u, neighbors in graph.adjacency.items():  # aristas
-        for v, w in neighbors:
-            dist[index[u]][index[v]] = min(dist[index[u]][index[v]], w)  # asigna peso mínimo
-
-    for k in range(n):  # nodo intermedio
-        for i in range(n):
-            for j in range(n):
-                if dist[i][k] + dist[k][j] < dist[i][j]:  # mejora camino
-                    dist[i][j] = dist[i][k] + dist[k][j]  # actualiza
-
-    safe_matrix = [[dist[i][j] if math.isfinite(dist[i][j]) else None for j in range(n)] for i in range(n)]  # JSON-safe
-    return {"nodes": nodes, "matrix": safe_matrix}
 
 
 # --- K-Means (endpoint /algorithms/kmeans, clusters de suelo para mapas/dashboard) ---
@@ -183,48 +138,3 @@ def run_bellman_ford(graph: ZoneGraph, source: str) -> Dict:
 
     return {"source": source, "distance": dist, "prev": prev}
 
-
-# --- Kosaraju (endpoint /algorithms/kosaraju, componentes fuertemente conectadas para agrupaciones) ---
-def run_kosaraju(graph: ZoneGraph) -> Dict:
-    # Componentes fuertemente conectadas usando aristas dirigidas (mejor -> peor calidad)
-    directed = graph.directed  # grafo dirigido
-    visited: set[str] = set()  # visitados
-    order: List[str] = []  # orden de salida
-
-    def dfs(node: str):
-        visited.add(node)  # marca
-        for neigh, _ in directed.get(node, []):  # vecinos
-            if neigh not in visited:
-                dfs(neigh)  # recursión
-        order.append(node)  # push al terminar
-
-    for node in directed.keys():  # dfs sobre cada nodo
-        if node not in visited:
-            dfs(node)
-
-    # Reverse graph
-    reversed_edges: Dict[str, List[str]] = {n: [] for n in directed.keys()}  # grafo invertido
-    for u, neighs in directed.items():  # aristas
-        for v, _ in neighs:
-            reversed_edges[v].append(u)  # invierte
-
-    visited.clear()  # limpia visitados
-    components: List[List[str]] = []  # lista de CFC
-
-    def dfs_rev(node: str, acc: List[str]):
-        visited.add(node)  # marca
-        acc.append(node)  # agrega a componente
-        for neigh in reversed_edges.get(node, []):  # vecinos invertidos
-            if neigh not in visited:
-                dfs_rev(neigh, acc)  # recursión
-
-    for node in reversed(order):  # proceso inverso
-        if node not in visited:
-            comp: List[str] = []  # nueva componente
-            dfs_rev(node, comp)  # DFS en grafo invertido
-            components.append(comp)  # agrega componente
-
-    scored_components = [
-        {"nodes": comp, "metrics": _cluster_metrics(graph, comp)} for comp in sorted(components, key=len, reverse=True)
-    ]  # añade métricas
-    return {"components": scored_components}  # salida

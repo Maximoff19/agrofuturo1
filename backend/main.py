@@ -94,15 +94,15 @@ async def divide_and_conquer(partitions: int = Query(4, ge=1, le=16)):
 async def sort_series(
     dataset: str = Query("climate", description="climate|soil"),
     metric: str = Query("TT"),
-    method: str = Query("quicksort", description="quicksort|mergesort"),
+    method: str = Query("quicksort", description="quicksort"),
     year: Optional[int] = Query(None),
     limit: int = Query(DEFAULT_SORT_LIMIT, ge=10, le=5000),
     reverse: bool = Query(False),
 ):
     dataset = dataset.lower()
     method = method.lower()
-    if method not in ("quicksort", "mergesort"):
-        raise HTTPException(status_code=400, detail="Método inválido, usa quicksort o mergesort")
+    if method != "quicksort":
+        raise HTTPException(status_code=400, detail="Método inválido, usa quicksort")
 
     if dataset == "climate":
         series = climate_timeseries(metric=metric, year=year, limit=limit)
@@ -126,13 +126,6 @@ async def sort_series(
     return {"dataset": dataset, "metric": metric, "method": method, "items": sorted_items}
 
 
-@app.get("/algorithms/floyd-warshall")
-async def floyd_warshall():
-    graph = app.state.graph
-    result = await asyncio.to_thread(algorithms.run_floyd_warshall, graph)
-    return result
-
-
 @app.get("/algorithms/kmeans")
 async def kmeans(k: int = Query(DEFAULT_KMEANS_K, ge=2, le=12)):
     soil_grouped = app.state.soil_grouped
@@ -150,12 +143,6 @@ async def bellman_ford(start: Optional[str] = Query(None)):
     result = await asyncio.to_thread(algorithms.run_bellman_ford, graph, start_node)
     return result
 
-
-@app.get("/algorithms/kosaraju")
-async def kosaraju():
-    graph = app.state.graph
-    result = await asyncio.to_thread(algorithms.run_kosaraju, graph)
-    return result
 
 
 @app.get("/")
