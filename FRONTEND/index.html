@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AgroFuturo — Demo Huancayo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo">
+          <img src="Gemini_Generated_Image_6ehg6v6ehg6v6ehg-Photoroom.png" alt="AgroFuturo" />
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="resetBtn" class="btn ghost">Reset</button>
+        <a class="btn primary" href="#recomendacion">Ver recomendación</a>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="side">
+        <section class="card">
+          <h2>Parámetros</h2>
+          <label class="field">
+            <span>Presupuesto (USD)</span>
+            <input id="presupuesto" type="number" min="500" step="100" value="5000" />
+          </label>
+          <label class="field">
+            <span>Objetivo</span>
+            <select id="objetivo">
+              <option value="equilibrado">Equilibrado (rendimiento + riesgo)</option>
+              <option value="rendimiento">Maximizar rendimiento</option>
+              <option value="riesgo">Minimizar riesgo</option>
+            </select>
+          </label>
+
+          <label class="toggle" style="margin-top:8px">
+            <input type="checkbox" id="toggleRoutes" />
+            <span>Mostrar rutas sugeridas</span>
+          </label>
+
+          <div class="alert" id="budgetAlert" hidden>
+            <strong>Presupuesto insuficiente</strong>
+            El m² cuesta S/ 2,000. Incrementa tu presupuesto para ver terrenos disponibles.
+          </div>
+
+          <button id="calcularBtn" class="btn full primary">Calcular recomendación</button>
+        </section>
+
+        <section class="card" id="recomendacion">
+          <h2>Recomendación</h2>
+          <div id="recoResumen" class="reco-resumen muted">Ingresa parámetros y presiona "Calcular".</div>
+          <div class="reco-grid" id="recoGrid" hidden>
+            <div class="kpi">
+              <div class="kpi-label">Zona sugerida</div>
+              <div class="kpi-value" id="kpiZona">—</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Hectáreas estimadas</div>
+              <div class="kpi-value" id="kpiHas">—</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Costo/ha</div>
+              <div class="kpi-value" id="kpiCostoHa">—</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">ROI estimado</div>
+              <div class="kpi-value" id="kpiRoi">—</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Mejor ventana</div>
+              <div class="kpi-value" id="kpiVentana">—</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" id="rankingCard">
+          <h2>Ranking</h2>
+          <div class="ranking-list" id="rankingList" hidden></div>
+          <div class="muted" id="rankingPlaceholder">Calcula la recomendación para ver el ranking.</div>
+        </section>
+
+      </aside>
+
+      <section class="content">
+        <div class="map-shell">
+          <div class="map-toolbar">
+            <div class="search-field">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.8l-.3-.3a6.5 6.5 0 10-.7.7l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 110-9 4.5 4.5 0 010 9z"/></svg>
+              <input type="text" placeholder="Buscar zonas o puntos simulados..." aria-label="Buscar" />
+            </div>
+            <div class="pill-row">
+              <span class="pill ghost stats-pill"><span id="listingCount">0</span> puntos simulados</span>
+            </div>
+          </div>
+
+          <div class="map-area">
+            <div class="map-counter" id="mapCounter">Puntos simulados</div>
+            <div id="map"></div>
+
+            <div class="listing-float" id="listingCard">
+              <div class="listing-photo">
+                <span class="pill badge" id="listingBadge">Destacado</span>
+                <img id="listingThumb" src="" alt="Lote simulado" />
+              </div>
+              <div class="listing-body">
+                <div class="price-row">
+                  <div class="price-main" id="listingPrice">S/ —</div>
+                  <div class="price-sub" id="listingMaintenance">Mantenimiento</div>
+                </div>
+                <div class="listing-title" id="listingTitle">Selecciona un marcador</div>
+                <div class="listing-address" id="listingAddress"></div>
+                <div class="listing-meta" id="listingMeta"></div>
+                <p class="listing-detail" id="listingDetail"></p>
+                <div class="listing-metrics" id="listingMetrics"></div>
+                <div class="listing-actions">
+                  <button class="btn whatsapp">WhatsApp</button>
+                  <button class="btn ghost outline">Contactar</button>
+                </div>
+                <div class="listing-pills" id="listingPills"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section class="card charts">
+          <div class="charts-header">
+            <h2>Métricas</h2>
+            <div class="chart-legend" id="zonaLegend"></div>
+          </div>
+          <div class="metric-legend">
+            <span class="legend-label">Suelo:</span> puntaje compuesto de pH, MO, CEC, nutrientes e índice de calidad.<br/>
+            <span class="legend-label">pH:</span> acidez/alkalinidad promedio del suelo.<br/>
+            <span class="legend-label">MO %:</span> porcentaje de materia orgánica.<br/>
+            <span class="legend-label">CEC:</span> capacidad de intercambio catiónico (fertilidad).<br/>
+            <span class="legend-label">N % / P / K:</span> nitrógeno, fósforo y potasio disponibles.<br/>
+            <span class="legend-label">Pend %:</span> pendiente media del terreno.<br/>
+            <span class="legend-label">Muestras:</span> número de muestras de suelo usadas.<br/>
+            <span class="legend-label">Calidad:</span> índice de calidad de suelo agregado.
+          </div>
+          <div id="metricsPanel" class="metrics-panel"></div>
+          <div class="charts-grid">
+            <canvas id="chartSuelo" class="chart-canvas"></canvas>
+            <canvas id="chartDetalle" class="chart-canvas"></canvas>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <small>Demo de interfaz — Datos de ejemplo. Mapas © Google</small>
+    </footer>
+
+    <script src="chartjs-lite.js"></script>
+    <script src="app.js"></script>
+    <script
+      async
+      defer
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCbZbFpwRQeVOsavxODXd-abDUxhCllpbk&libraries=geometry&callback=initAgroFuturo"
+    ></script>
+  </body>
+  </html>
