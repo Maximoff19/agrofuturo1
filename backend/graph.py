@@ -48,7 +48,7 @@ def build_zone_graph(
         for row in records.itertuples(index=False)
     }
 
-    # Precompute geo distance normalization
+   
     geo_distances: Dict[Tuple[str, str], float] = {}
     max_geo = 0.0
     for i, row_i in records.iterrows():

@@ -105,6 +105,7 @@ let selectedListingId = null;
 let kmeansResult = null;
 let climateSeries = { TT: [], RR: [] };
 let loadingState = false;
+let routeWeights = { feature: 0.6, geo: 0.4 };
 
 // Mapa principal (Google Maps)
 let map;
@@ -958,7 +959,25 @@ function initUI(){
     clearRoutes();
   });
 
-  document.getElementById('objetivo').addEventListener('change', () => {});
+  const pesoSueloInput = document.getElementById('pesoSuelo');
+  const pesoSueloVal = document.getElementById('pesoSueloVal');
+  const pesoGeoVal = document.getElementById('pesoGeoVal');
+  const updatePesos = (val) => {
+    const v = clamp(parseFloat(val) || 0, 0, 1);
+    routeWeights.feature = v;
+    routeWeights.geo = clamp(1 - v, 0, 1);
+    if (pesoSueloVal) pesoSueloVal.textContent = `${Math.round(routeWeights.feature * 100)}%`;
+    if (pesoGeoVal) pesoGeoVal.textContent = `${Math.round(routeWeights.geo * 100)}%`;
+  };
+  if (pesoSueloInput) {
+    updatePesos(pesoSueloInput.value);
+    pesoSueloInput.addEventListener('input', async (e) => {
+      updatePesos(e.target.value);
+      if (document.getElementById('toggleRoutes').checked) {
+        await drawRouteForVisibleListings(visibleListings);
+      }
+    });
+  }
 
   document.getElementById('toggleRoutes').addEventListener('change', async (e) => {
     const presupuesto = parseFloat(document.getElementById('presupuesto').value || '0');
@@ -1037,11 +1056,16 @@ function applyListingFilter(){
 // --- Bellman-Ford helpers (ruta óptima en grafo de zonas) ---
 async function fetchBellmanFord(startId){
   if (!startId) return null;
-  const url = `${API_BASE}/algorithms/bellman-ford?start=${encodeURIComponent(startId)}`;
+  const params = new URLSearchParams({
+    start: startId,
+    feature_weight: routeWeights.feature.toString(),
+    geo_weight: routeWeights.geo.toString()
+  });
+  const url = `${API_BASE}/algorithms/bellman-ford?${params.toString()}`;
   try {
     return await fetchJSON(url); // pide distancias y predecesores al backend
   } catch (err) {
-    console.warn('Fallo al pedir Bellman-Ford, usando heurística.', err);
+    console.warn('Fallo al pedir Bellman-Ford.', err);
     return null;
   }
 }
@@ -1083,24 +1107,7 @@ function buildBellmanRoute(list, bellman){
   return routeIds.map(id => byId[id]);
 }
 
-// Heurística greedy (vecino más cercano) como fallback si falla Bellman-Ford.
-function buildGreedyRoute(list){
-  if (!list?.length) return [];
-  const route = [list[0]];
-  const remain = list.slice(1);
-  while (remain.length){
-    const last = route[route.length-1];
-    let bestIdx = 0; let bestD = Infinity;
-    for (let i=0;i<remain.length;i++){
-      const d = haversine(last, remain[i]);
-      if (d < bestD){ bestD = d; bestIdx = i; }
-    }
-    route.push(remain.splice(bestIdx,1)[0]);
-  }
-  return route;
-}
-
-// --- Rutas visibles (Bellman-Ford preferido, greedy como respaldo) ---
+// --- Rutas visibles (Bellman-Ford) ---
 async function drawRouteForVisibleListings(list = visibleListings){
   clearRoutes(); // limpia cualquier ruta previa antes de dibujar
   const requestId = ++routeRequestToken; // token para invalidar respuestas viejas si el usuario cambia filtros
@@ -1108,8 +1115,7 @@ async function drawRouteForVisibleListings(list = visibleListings){
   const ordered = [...list].sort((a,b) => a.priceUsd - b.priceUsd); // arranca desde el más barato para consistencia
 
   const bellman = await fetchBellmanFord(ordered[0]?.id); // pide ruta óptima en el grafo de suelo
-  const bellmanRoute = buildBellmanRoute(ordered, bellman); // reconstruye orden si hay datos válidos
-  const route = (bellmanRoute?.length >= 2) ? bellmanRoute : buildGreedyRoute(ordered); // usa BF o fallback greedy
+  const route = buildBellmanRoute(ordered, bellman) || ordered; // usa BF; si no hay datos, recurre al orden básico
 
   let routesBounds = new google.maps.LatLngBounds(); // acumulador para encuadrar todo
   for (let i=0;i<route.length-1;i++){ // recorre los pares consecutivos de la ruta
@@ -1177,8 +1183,8 @@ function computeTopZones(presupuesto, objetivo, k = 3){
   return evals.slice(0, Math.min(k, evals.length));
 }
 
-// --- Rutas sugeridas (Top zonas + Bellman-Ford, fallback vecino más cercano) ---
-// Toma las 3 zonas mejor evaluadas, arma el orden preferentemente con Bellman-Ford
+// --- Rutas sugeridas (Top zonas + Bellman-Ford) ---
+// Toma las 3 zonas mejor evaluadas, arma el orden con Bellman-Ford
 // y dibuja el recorrido con geometría de Google Directions.
 async function drawSuggestedRoutes(presupuesto, objetivo){
   const requestId = ++routeRequestToken; // token para invalidar si hay otro request
@@ -1196,8 +1202,7 @@ async function drawSuggestedRoutes(presupuesto, objetivo){
   }));
 
   const bellman = await fetchBellmanFord(candidates[0]?.id); // pide rutas mínimas desde la mejor zona
-  const bellmanRoute = buildBellmanRoute(candidates, bellman); // ruta ordenada por costo en el grafo
-  const order = (bellmanRoute?.length >= 2) ? bellmanRoute : buildGreedyRoute(candidates); // usa Bellman-Ford o fallback
+  const order = buildBellmanRoute(candidates, bellman) || candidates; // ruta ordenada por costo en el grafo
 
   let routesBounds = null; // bounds opcional para ajustar la vista
   for (let i=0;i<order.length-1;i++){ // dibuja cada tramo consecutivo

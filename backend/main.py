@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import algorithms
-from .config import DEFAULT_KMEANS_K, DEFAULT_SORT_LIMIT
+from .config import DEFAULT_KMEANS_K, DEFAULT_SORT_LIMIT, FEATURE_WEIGHT, GEO_WEIGHT
 from .data_loader import (
     climate_timeseries,
     dataset_summary,
@@ -135,13 +135,25 @@ async def kmeans(k: int = Query(DEFAULT_KMEANS_K, ge=2, le=12)):
 
 
 @app.get("/algorithms/bellman-ford")
-async def bellman_ford(start: Optional[str] = Query(None)):
-    graph = app.state.graph
+async def bellman_ford(
+    start: Optional[str] = Query(None),
+    feature_weight: float = Query(FEATURE_WEIGHT, ge=0.0, le=1.0, description="Peso similitud de suelo"),
+    geo_weight: float = Query(GEO_WEIGHT, ge=0.0, le=1.0, description="Peso distancia geográfica"),
+):
+    if feature_weight + geo_weight == 0:
+        raise HTTPException(status_code=400, detail="feature_weight + geo_weight debe ser > 0")
+    # Recalcula grafo con pesos personalizados (barato: pocos nodos)
+    soil_grouped = app.state.soil_grouped
+    graph = build_zone_graph(soil_grouped, feature_weight=feature_weight, geo_weight=geo_weight)
     start_node = start or _default_start_node()
     if start_node not in graph.nodes:
         raise HTTPException(status_code=404, detail=f"No se encontró el distrito {start_node}")
     result = await asyncio.to_thread(algorithms.run_bellman_ford, graph, start_node)
-    return result
+    return {
+        "feature_weight": feature_weight,
+        "geo_weight": geo_weight,
+        **result,
+    }
 
 
 

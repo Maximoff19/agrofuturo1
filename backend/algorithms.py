@@ -136,5 +136,5 @@ def run_bellman_ford(graph: ZoneGraph, source: str) -> Dict:
         if not updated:
             break  # sin cambios => óptimo
 
-    return {"source": source, "distance": dist, "prev": prev}
-
+    distance_safe = {k: (v if math.isfinite(v) else None) for k, v in dist.items()}  # JSON-safe
+    return {"source": source, "distance": distance_safe, "prev": prev}
